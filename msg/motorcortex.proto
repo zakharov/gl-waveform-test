@@ -1,0 +1,910 @@
+/**
+*
+* Description of the motorcortex-core message.
+*
+* All core data types, enumerators and RPC messages are defined here.
+*
+* Version 1.0.0
+*
+*/
+syntax = "proto2";
+
+package motorcortex;
+
+/**
+*
+* Some SI units.
+*
+*/
+enum Unit {
+    unit_undefined = 0;
+
+    Length = 0xf; // Length mask 0xf
+    mm = 0x1; // millimeters 0x1
+    m = 0x2; // meters 0x2
+
+    Angle = 0xf1; // Angle mask 0xf1
+    rad = 0x31; // radians 0x31
+    deg = 0x41; // degrees 0x41
+
+    Time = 0xf2; // Time mask 0xf2
+    nanosec = 0x12; // nanoseconds 0x12
+    microsec = 0x22; // microseconds 0x22
+    millisec = 0x32; // milliseconds 0x32
+    sec = 0x42; // seconds 0x42
+
+    Weight = 0xf3; // Weight mask 0xf3
+    gram = 0x13; // grams 0x13
+    kg = 0x23; // kilograms 0x23
+
+    Velocity = 0xf4; // Velocity mask 0xf4
+    m_sec = 0x14; // linear velocity, meters per second 0x14
+    rad_sec = 0x24; // angular velocity, radians per second 0x24
+
+    Acceleration = 0xf5; // Acceleration mask 0xf5
+    m_sec2 = 0x15; // linear acceleration meters per second^2 0x15
+    rad_sec2 = 0x25; // angular acceleration radians per second^2 0x25
+
+    Force = 0xf6; // Force mask 0xf6
+    N = 0x16; // force, newtons 0x16
+    Nm = 0x26; // torque, newton-metres 0x26
+
+    percent = 0x17; // percentages 0x17
+
+};
+
+/**
+*
+* Available user groups.
+*
+* Group determines an access level of the user. Users can belong to one group: Administrator, Operator or Guest.
+* System is reserved for internal motorcortex-core use.
+* By default Operator cannot read or write Administrator's related parameters. The administrator has a full access
+* to the Operator's data.
+*
+* Group access can be reconfigured in C++ server code or in the server configuration file. Furthermore, parameterization
+* of the access can be done by setting permission level (Permission) of the parameter.
+*
+*/
+enum UserGroup {
+    user_group_undefined = 0x0;
+
+    SYSTEM = 0x1; // System group has full access. It is not available for the users.
+    ADMINISTRATOR = 0x3; // Administrator group has full access, except for system-level parameters.
+    OPERATOR = 0x7; // Operator has limited write access and read access.
+    GUEST = 0x7FFFFFFF; // Guest has read access.
+};
+
+/**
+*
+* Available parameters' permissions. Different users/groups may require access to different and/or protected parts of
+* the parameter tree. Permission flags allow fine-tuning access levels of the groups. 
+*
+* The Motorcortex permissions structure is similar to that of Unix file permissions. Permissions are represented 
+* either in symbolic notation or in octal notation. (Note: User rights are not yet implemented, instead use Group rights)
+*
+* For example:
+*
+* ---------- (0000): no permission
+*
+* -rwx------ (0700): read, write, & execute only for owner (Note: currently not implemented, user group flags instead)
+*
+* -rwxrwx--- (0770): read, write, & execute for owner and group (Note: execute flag is used as a permission to open folders)
+*
+* -rwxrwxr-x (0775): read, write, & execute for owner and group, read & execute for all others.
+*
+* -rwxrwxrwx (0777): full access
+*
+*/
+enum Permission {
+    permission_undefined = 0x0;
+
+    USER_READ = 0400; // owner user read -r--------
+    USER_WRITE = 0200; // owner user write --w-------
+    USER_EXECUTE = 0100; // owner user execute ---e------
+
+    GROUP_READ = 040; // owner group read ----r-----
+    GROUP_WRITE = 020; // owner group write -----w----
+    GROUP_EXECUTE = 010; // owner group execute ------e---
+
+    OTHERS_READ = 04; // other users read -------r--
+    OTHERS_WRITE = 02; // other users write --------w-
+    OTHERS_EXECUTE = 01; // other users ---------e
+};
+
+/**
+*
+* Available data types.
+*
+* Data types supported by a parameter server.
+*
+* User data types can be added after the tag USER_TYPE.
+*
+*/
+enum DataType {
+    data_type_undefined = 0x0;
+
+    INT8 = 0x1; // integer 1 byte
+    UINT8 = 0x2; // unsigned integer 1 byte
+    INT16 = 0x3; // short int
+    UINT16 = 0x4; // unsigned short int
+    INT32 = 0x5; // int
+    UINT32 = 0x6; // unsigned int
+    INT64 = 0x7; // long
+    UINT64 = 0x8; // unsigned long
+    BOOL = 0x9; // boolean
+
+    FLOAT = 0x101; // float
+    DOUBLE = 0x102; // double
+
+    CHAR = 0x201; // char
+    STRING = 0x202; // C-string
+
+    BYTES = 0x499; // bytes array
+
+    USER_TYPE = 0x500; // end of the system types
+
+    /*user types starts after 0x500*/
+};
+
+/**
+*
+* TreeNode's IO types.
+*
+* Each parameter in the tree can be an INPUT, an OUTPUT or a PARAMETER.
+*
+* PARAMETER type is both an input and output, it can be saved and loaded from the disk.
+*
+* Value of a parameter with OUTPUT type cannot be set, but can be overwritten (forced). Force operation
+* on the OUTPUT will only change the parameter value on everything that is linked to it. It will
+* NOT change the internal value of the block to which the output belongs.
+*
+*/
+enum ParameterType {
+    param_type_undefined = 0x0;
+
+    INPUT = 0x01; // Input parameter.
+    OUTPUT = 0x10; // Output parameter.
+
+    PARAMETER = 0x100; // Input/output parameter, which is saved and loaded from the disk.
+    PARAMETER_INTERNAL = 0x101; // Input/output parameter, which is not saved or loaded from the disk.
+};
+
+/**
+*
+* Return status codes.
+*
+* Return status codes are included in the reply for every user's request. Using these
+* codes user can verify if request was successful or there was a failure.
+*
+*/
+enum StatusCode {
+    OK = 0x0; // Request was processed successfully.
+    READ_ONLY_MODE = 0x1; // Login is successful, but user has read-only right.
+
+    FAILED = 0xFF00; // Generic failure mask.
+
+    FAILED_TO_DECODE = 0x1000; // Failed to decode request message.
+    SUB_LIST_IS_FULL = 0x1100; // Failed to subscribe for a parameter, because subscription list is full. Create new parameter group.
+    WRONG_PARAMETER_PATH = 0x1200; // Failed to find parameter, because requested path is wrong.
+    FAILED_TO_SET_REQUESTED_FRQ = 0x1300; // When several clients share the same publisher's group, original publishing frequency is preserved.
+    FAILED_TO_OPEN_FILE = 0x1400; // Failed to open/save/load a file.
+
+    WRONG_PASSWORD = 0x2100; // Login failed, wrong login or password.
+    USER_NOT_LOGGED_IN = 0x2200; // Operation not permitted, because user is not logged in.
+    PERMISSION_DENIED = 0x2300; // Permission denied because user has no access rights.
+};
+
+/**
+*
+* Available error levels.
+*
+* Generic user levels generated by the logic. (Note: Check examples of the state machine.)
+*
+*/
+enum ErrorLevel {
+    error_level_undefined = 0x0;
+    INFO = 0x1; // Information message.
+    WARNING = 0x2; // Warning message.
+    FORCED_DISENGAGE = 0x3; // Graceful software stop, caused by a hardware malfunction or a wrong user actions.
+    SHUTDOWN = 0x4; // More abrupt software stop, caused by a hardware malfunction.
+    EMERGENCY_STOP = 0x5; // Abrupt software and hardware stop, caused by a hardware malfunction.
+};
+
+/**
+* 
+* Avaliable offset types.
+*
+* When setting a parameter value user can specify an offset and length
+*
+*/
+enum OffsetType {
+    offset_type_undefined = 0x0;
+    OFFSET_ELEMENTS = 0x1; // Offset and length is calculated in the elements. For example update an array starting from the element number 3.
+    OFFSET_BYTES = 0x2; // Offset and length is calculated in bytes.
+    OFFSET_BITS = 0x3; // Offset and length is calculated in bits.
+}
+
+/**
+* 
+* ParameterOffset description.
+*
+* An offset can be applied when setting a new value of the parameter array
+*
+*/
+message ParameterOffset {
+    required OffsetType type = 1 [default = OFFSET_ELEMENTS]; // Type of the offset.
+    required uint32 offset = 2; // Starting point.
+    required uint32 length = 3; // Length from starting point.
+}
+
+/**
+*
+* Error description.
+*
+* System type, which describes an error.
+*
+*/
+message Error {
+    required fixed64 timestamp = 1; // System time, when error occurred.
+    required fixed32 error_number = 2; // Error code.
+    required fixed32 error_level = 3; // Error level.
+    required fixed32 subsystem = 4; // Subsystem, for example 1 is 1st actuator of the system.
+    required fixed32 info = 5; // Additional error code, provided by hardware.
+};
+
+/**
+*
+*
+* List of errors.
+*
+* Error messages are sent to the client as a list of N active errors.
+*
+*/
+message ErrorList {
+    repeated Error errors = 1; // List of active errors.
+    required fixed32 number_of_errors = 2; // Number of errors in the list.
+    required fixed32 update_counter = 3; // An update couter changes everytime the list of active errors is updated.
+};
+
+/**
+*
+* System parameter's flag
+*
+* TreeNode can have various system flags, which shows that it is been overwritten or linked.
+* (Note: This list will grow in future)
+*
+*/
+enum ParameterFlag {
+    LINK_IS_ACTIVE = 0x1; // TreeNode is linked to another parameter.
+    OVERWRITE_IS_ACTIVE = 0x2; // TreeNode is being overwritten.
+};
+
+/**
+*
+* TreeNode information fields.
+*
+* Active state of the parameter in the tree, including its name, size, data type, io type and active flags.
+*
+*/
+message ParameterInfo {
+    required uint32 id = 1; // Unique id, assigned by parameter server.
+
+    required uint32 data_type = 2; // Tag of the data type.
+    required uint32 data_size = 3; // Size of one data element.
+    required uint32 number_of_elements = 4; // Number of the elements.
+
+    required uint32 flags = 5; // TreeNode flags (overwrite, link etc...).
+    required uint32 permissions = 6; // Access permissions.
+    required ParameterType param_type = 7; // I/O type of the parameter.
+    required UserGroup group_id = 8; // Group ID of the owner.
+    required Unit unit = 9; // SI unit of the parameter.
+
+    required string path = 10; // Path (including name) of the parameter.
+};
+
+/**
+*
+* Parameters' group information.
+*
+* This data type represents the subscription information, required to decode parameters from the group message.
+*
+*/
+message GroupParameterInfo {
+    required uint32 index = 1; // Index of the subscribed parameter.
+    required uint32 offset = 2; // Offset in the group message.
+    required uint32 size = 3; // Size of the parameter.
+    required ParameterInfo info = 4; // TreeNode information.
+    required StatusCode status = 5; // Status code.
+};
+
+/**
+*
+* Generic message header, included in the request/reply messages.
+*
+*/
+message Header {
+    required fixed32 frameCounter = 1; // Frame counter counts number of parameter updates.
+    required fixed64 timestamp = 2; // Current server time in the format: microseconds from 1 Jan 2000.
+};
+
+/**
+*
+* Group message, used by the publisher. (Note: currently is not used, since publisher is not using protobuf)
+*
+*/
+message GroupMsg {
+    optional Header header = 1; // Frame counter and actual time.
+    repeated ParameterMsg params = 2; // List of published parameters.
+};
+
+// RPC messages
+
+/**
+*
+* Status code message.
+*
+* Reply with a status code for various request messages.
+*
+*/
+message StatusMsg {
+    optional Header header = 1; // Frame counter and actual time.
+    required StatusCode status = 2; // Return status of the request.
+};
+
+/**
+*
+* Login request.
+*
+* User request to get access to the parameter tree.
+*
+* Server's reply: StatusMsg, with following status codes:
+*
+* StatusCode::OK - user is logged in,
+*
+* StatusCode::READ_ONLY_MODE - user is logged in, read only mode,
+*
+* StatusCode::WRONG_PASSWORD - login failed, wrong login or password.
+*
+* StatusCode::FAILED_TO_DECODE - failed to decode request message.
+*
+*/
+message LoginMsg {
+    optional Header header = 1; // Frame counter and actual time.
+    required string login = 2; // User's login.
+    required string password = 3; // User's password.
+};
+
+/**
+*
+* Request a session token.
+*
+* After user is logged-in it can request a session token for re-login.
+*
+* Server's reply: SessionTokenMsg with the token status code. 
+*
+*/
+message GetSessionTokenMsg {
+    optional Header header = 1; // Frame counter and actual time.
+}
+
+/**
+*
+* Session token.
+*
+* A token with current session id. The toke is used for re-logging if 
+* the connection is lost.
+*
+* Server's reply: SessionTokenmsg with the token and one of the following 
+* status codes:
+*
+* StatusCode::OK - token is granted,
+*
+* StatusCode::PERMISSION_DENIED - user has no permission,
+*
+* StatusCode::FAILED - operation failed,
+*
+* StatusCode::FAILED_TO_DECODE - failed to decode request message.
+*
+*/
+message SessionTokenMsg {
+    optional Header header = 1; // Frame counter and actual time.
+    required string token = 2; // Session token.
+    required StatusCode status = 3; // Status code.
+}
+
+/**
+*
+* Restore session request.
+*
+* User request to restore the old session to access to the parameter tree.
+*
+* Server's reply: StatusMsg, with following status codes:
+*
+* StatusCode::OK - user is logged in,
+*
+* StatusCode::READ_ONLY_MODE - user is logged in, read only mode,
+*
+* StatusCode::PERMISSION_DENIED - login failed, token expired,
+*
+* StatusCode::FAILED - operation failed,
+*
+* StatusCode::FAILED_TO_DECODE - failed to decode request message.
+*
+*/
+message RestoreSessionMsg {
+    optional Header header = 1; // Frame counter and actual time.
+    required string token = 2; // Session token.  
+}
+
+/**
+*
+* Logout request.
+*
+* User request to exit. Logout will happen automatically if user is disconnected.
+*
+* Server's reply: StatusMsg, with following status codes:
+*
+* StatusCode::OK - user is logged out,
+*
+* StatusCode::FAILED - operation failed,
+*
+* StatusCode::FAILED_TO_DECODE - failed to decode request message.
+*
+*/
+message LogoutMsg {
+    optional Header header = 1; // Frame counter and actual time.
+};
+
+/**
+*
+* Request to get a parameter tree message
+*
+* Server's reply: ParameterTreeMsg, with following status codes:
+*
+* StatusCode::OK - user is logged out,
+*
+* StatusCode::FAILED - operation failed.
+*
+* StatusCode::FAILED_TO_DECODE - failed to decode request message.
+*
+*/
+message GetParameterTreeMsg {
+    optional Header header = 1; // Frame counter and actual time.
+};
+
+/**
+*
+* TreeNode tree data, which contains information about tree structure and available parameters.
+* Message can have following status codes:
+*
+* StatusCode::OK - operation successful,
+*
+* StatusCode::FAILED - operation failed.
+*
+* StatusCode::FAILED_TO_DECODE - failed to decode request message.
+*
+*/
+message ParameterTreeMsg {
+    optional Header header = 1; // Frame counter and actual time.
+    repeated ParameterInfo params = 2; // Array with available parameters.
+    required uint32 hash = 3; // Hash value of the parameter tree stored in 'repeated ParameterInfo params'.
+    required StatusCode status = 4; // Status code.
+};
+
+/**
+*
+* Request to get a parameter tree hash.
+*
+* Instead of requesting a complete parameter tree, a client might request only a tree hash to compare it
+* against the cached tree to detect if the tree on the server has been changed. The difference between hashes
+* indicates the changes in the tree structure. 
+* Note: Changes in parameter values do not result in a different tree hash.
+*
+* Server's reply: ParameterTreeHashMsg, with following status codes:
+*
+* StatusCode::OK - operation successful,
+*
+* StatusCode::FAILED - operation failed.
+*
+* StatusCode::FAILED_TO_DECODE - failed to decode request message.
+*
+*/
+message GetParameterTreeHashMsg {
+    optional Header header = 1; // Frame counter and actual time.
+};
+
+/**
+*
+* TreeNode tree hash.
+*
+* Hash of the parameter tree.
+*
+* Message can have following status codes:
+*
+* StatusCode::OK - operation successful,
+*
+* StatusCode::FAILED - operation failed.
+*
+* StatusCode::FAILED_TO_DECODE - failed to decode request message.
+*
+*/
+message ParameterTreeHashMsg {
+    optional Header header = 1; // Frame counter and actual time.
+    required uint32 hash = 2; // Hash of the tree.
+    required StatusCode status = 3; // Status code.
+};
+
+/**
+*
+* Request to create a publisher group.
+*
+* User's request to start publishing specified parameters. Several users may subscribe to
+* the same group. This mechanism reduces the load on the server and allows more clients to get
+* frequent updates.
+*
+* User may choose a scale factor for the publishing rate of the group.
+*
+* Server's reply: GroupStatusMsg, with following status codes:
+*
+* StatusCode::OK - operation successful,
+*
+* StatusCode::FAILED - operation failed.
+*
+* StatusCode::PERMISSION_DENIED - Permission denied because the user has no access rights.
+*
+* StatusCode::FAILED_TO_SET_REQUESTED_FRQ - operation successful, but failed to change publisher's frequency, because the group has already existed.
+*
+* StatusCode::FAILED_TO_DECODE - failed to decode request message.
+*
+*/
+message CreateGroupMsg {
+    optional Header header = 1; // Frame counter and actual time.
+    required uint32 frq_divider = 2; // Requested frequency divider, to scale down publisher rate.
+    required string alias = 3; // Name of the group.
+    repeated string paths = 4; // List of the parameters.
+};
+
+/**
+*
+* Group package description.
+*
+* Reply for 'CreateGroupMsg', with the package structure.
+*
+* Message can have following status codes:
+*
+* StatusCode::OK - operation successful,
+*
+* StatusCode::FAILED - operation failed,
+*
+* StatusCode::PERMISSION_DENIED - Permission denied because user has no access rights.
+*
+* StatusCode::FAILED_TO_SET_REQUESTED_FRQ - operation successful, but failed to change publisher's frequency, because the group has already existed.
+*
+* StatusCode::FAILED_TO_DECODE - failed to decode request message.
+*
+*/
+message GroupStatusMsg {
+    optional Header header = 1; // Frame counter and actual time.
+    required uint32 id = 2; // Unique id of the group.
+    required string alias = 3; // Name of the group.
+    repeated GroupParameterInfo params = 4; // List of parameters' info.
+    required StatusCode status = 5; // Status code.
+};
+
+/**
+*
+* Request to remove a publisher group.
+*
+* User's request to unsubscribe from the group.
+*
+* Server's reply: StatusMsg, with following status codes:
+*
+* StatusCode::OK - operation successful,
+*
+* StatusCode::FAILED - operation failed,
+*
+* StatusCode::PERMISSION_DENIED - Permission denied because user has no access rights.
+*
+* StatusCode::FAILED_TO_DECODE - failed to decode request message.
+*
+*/
+message RemoveGroupMsg {
+    optional Header header = 1; // Frame counter and actual time.
+    required string alias = 2; // Name of the group.
+};
+
+/**
+*
+* Request to get a parameter info and its value.
+*
+* Server's reply: ParameterMsg, with following status codes:
+*
+* StatusCode::OK - operation successful,
+*
+* StatusCode::FAILED - operation failed.
+*
+* StatusCode::PERMISSION_DENIED - Permission denied because user has no access rights.
+*
+* StatusCode::FAILED_TO_DECODE - failed to decode request message.
+*
+*/
+message GetParameterMsg {
+    optional Header header = 1; // Frame counter and actual time.
+    required string path = 2; // Path of the requested parameter.
+};
+
+/**
+*
+* TreeNode info and its value.
+*
+* Reply for 'GetParameterMsg', with the parameter info and a value.
+*
+* Message can have following status codes:
+*
+* StatusCode::OK - operation successful,
+*
+* StatusCode::FAILED - operation failed.
+*
+* StatusCode::PERMISSION_DENIED - Permission denied because user has no access rights.
+*
+* StatusCode::FAILED_TO_DECODE - failed to decode request message.
+*
+*/
+message ParameterMsg {
+    required bytes value = 1; // TreeNode value.
+    optional Header header = 2; // Frame counter and actual time.
+    optional ParameterInfo info = 3; // TreeNode information.
+    required StatusCode status = 4; // Status code.
+};
+
+/**
+*
+* Request to get a list of parameters with info and values.
+*
+* Server's reply: ParameterListMsg, with following status codes:
+*
+* StatusCode::OK - operation successful,
+*
+* StatusCode::FAILED - operation failed.
+*
+* StatusCode::PERMISSION_DENIED - Permission denied because user has no access rights.
+*
+* StatusCode::FAILED_TO_DECODE - failed to decode request message.
+*
+*/
+message GetParameterListMsg {
+    optional Header header = 1; // Frame counter and actual time.
+    repeated GetParameterMsg params = 2; // List of requested parameter.
+};
+
+/**
+*
+* List of parameters with info values.
+*
+* Reply for 'GetParameterListMsg', with the list of parameters info and values.
+*
+* Message can have following status codes:
+*
+* StatusCode::OK - operation successful,
+*
+* StatusCode::FAILED - operation failed.
+*
+* StatusCode::PERMISSION_DENIED - Permission denied because user has no access rights.
+*
+* StatusCode::FAILED_TO_DECODE - failed to decode request message.
+*
+*/
+message ParameterListMsg {
+    optional Header header = 1; // Frame counter and actual time.
+    repeated ParameterMsg params = 2; // List of parameters.
+    required StatusCode status = 3; // Status code.
+};
+
+/**
+*
+* Request to set a parameter value.
+*
+* User's request to update a parameter value.
+*
+* Server's reply: StatusMsg, with following status codes:
+*
+* StatusCode::OK - operation successful,
+*
+* StatusCode::FAILED - operation failed.
+*
+* StatusCode::PERMISSION_DENIED - Permission denied because user has no access rights.
+*
+* StatusCode::USER_LOGGED_IN_NO_CONTROL - User is in read-only mode.
+*
+* StatusCode::WRONG_PARAMETER_PATH - Wrong parameter path.
+*
+* StatusCode::FAILED_TO_DECODE - failed to decode request message.
+*
+*/
+message SetParameterMsg {
+    optional Header header = 1; // Frame counter and actual time.
+    optional ParameterOffset offset = 2; // Offset of the parameter value.
+    required string path = 3; // Path of the requested parameter.
+    required bytes value = 4; // New values has to be encoded according to the data type, which is provided in the parameter info.
+};
+
+/**
+*
+* Request to set a list of parameters values.
+*
+* User's request to update a list of parameters values.
+*
+* Server's reply: StatusMsg, with following status codes:
+*
+* StatusCode::OK - operation successful,
+*
+* StatusCode::FAILED - operation failed.
+*
+* StatusCode::PERMISSION_DENIED - Permission denied because user has no access rights.
+*
+* StatusCode::USER_LOGGED_IN_NO_CONTROL - User is in read-only mode.
+*
+* StatusCode::WRONG_PARAMETER_PATH - Wrong parameter path.
+*
+* StatusCode::FAILED_TO_DECODE - failed to decode request message.
+*
+*/
+message SetParameterListMsg {
+    optional Header header = 1; // Frame counter and actual time.
+    repeated SetParameterMsg params = 2; // List of parameter set messages.
+};
+
+/**
+*
+* Request to overwrite/force a parameter value.
+*
+* User's request to force a parameter value. For the Input and TreeNode types the input value will be overwritten,
+* for the Output type, the output value will be overwritten.
+*
+* By enabling flag 'activate', overwrite value will be active until the flag is disabled, by ether commanding
+* ReleaseParameterMsg or OverwriteParameterMsg with 'activate' - false.
+*
+* Server's reply: StatusMsg, with following status codes:
+*
+* StatusCode::OK - operation successful,
+*
+* StatusCode::FAILED - operation failed.
+*
+* StatusCode::PERMISSION_DENIED - Permission denied because user has no access rights.
+*
+* StatusCode::USER_LOGGED_IN_NO_CONTROL - User is in read-only mode.
+*
+* StatusCode::WRONG_PARAMETER_PATH - Wrong parameter path.
+*
+* StatusCode::FAILED_TO_DECODE - failed to decode request message.
+*
+*/
+message OverwriteParameterMsg {
+    optional Header header = 1; // Frame counter and actual time.
+    optional ParameterOffset offset = 2; // Offset of the parameter value.
+    required bool activate = 3; // Flag to enable/disable permanent overwrite.
+    required string path = 4; // Path of the requested parameter.
+    required bytes value = 5; // New values.
+};
+
+/**
+*
+* Request to release an overwrite/force.
+*
+* User's request to cancel overwrite of a parameter value.
+*
+* Server's reply: StatusMsg, with following status codes:
+*
+* StatusCode::OK - operation successful,
+*
+* StatusCode::FAILED - operation failed.
+*
+* StatusCode::PERMISSION_DENIED - Permission denied because user has no access rights.
+*
+* StatusCode::USER_LOGGED_IN_NO_CONTROL - User is in read-only mode.
+*
+* StatusCode::WRONG_PARAMETER_PATH - Wrong parameter path.
+*
+* StatusCode::FAILED_TO_DECODE - failed to decode request message.
+*
+*/
+message ReleaseParameterMsg {
+    optional Header header = 1; // Frame counter and actual time.
+    required string path = 2; // Path of the requested parameter.
+};
+
+/**
+*
+* Request to save parameter values to the disk.
+*
+* User's request to save parameter values to XML file.
+*
+* Server's reply: StatusMsg, with following status codes:
+*
+* StatusCode::OK - operation successful,
+*
+* StatusCode::FAILED - operation failed.
+*
+* StatusCode::PERMISSION_DENIED - Permission denied because user has no access rights.
+*
+* StatusCode::USER_LOGGED_IN_NO_CONTROL - User is in read-only mode.
+*
+* StatusCode::FAILED_TO_OPEN - Failed to create/open a file.
+*
+* StatusCode::FAILED_TO_DECODE - failed to decode request message.
+*
+*/
+message SaveMsg {
+    optional Header header = 1; // Frame counter and actual time.
+    required string path = 2; // Path to a config file.
+    required string file_name = 3; // File name.
+};
+
+/**
+*
+* Request to load parameter values from the disk.
+*
+* User's request to load parameter values from XML file.
+*
+* Server's reply: StatusMsg, with following status codes:
+*
+* StatusCode::OK - operation successful,
+*
+* StatusCode::FAILED - operation failed.
+*
+* StatusCode::PERMISSION_DENIED - Permission denied because user has no access rights.
+*
+* StatusCode::USER_LOGGED_IN_NO_CONTROL - User is in read-only mode.
+*
+* StatusCode::FAILED_TO_OPEN - Failed to create/open a file.
+*
+* StatusCode::FAILED_TO_DECODE - failed to decode request message.
+*
+*/
+message LoadMsg {
+    optional Header header = 1; // Frame counter and actual time.
+    required string path = 2; // Path to config file.
+    required string file_name = 3; // File name.
+};
+
+/**
+*
+* Request to execute command on the server.
+*
+* User's request to execute a command on the server (console mode).
+*
+* Server's reply: StatusMsg, with following status codes:
+*
+* StatusCode::OK - operation successful,
+*
+* StatusCode::FAILED - operation failed.
+*
+* (Note: Currently not implemented).
+*
+*/
+message ConsoleCmdMsg {
+    optional Header header = 1; // Frame counter and actual time.
+    required string value = 2; // Console command
+};
+
+/**
+*
+* Request to execute a list of commands on the server.
+*
+* User's request to execute a list of commands on the server (console mode).
+*
+* Server's reply: StatusMsg, with following status codes:
+*
+* StatusCode::OK - operation successful,
+*
+* StatusCode::FAILED - operation failed.
+*
+* (Note: Currently not implemented).
+*
+*/
+message ConsoleCmdListMsg {
+    optional Header header = 1; // Frame counter and actual time.
+    repeated ConsoleCmdMsg cmds = 2; // List of commands
+};
+
