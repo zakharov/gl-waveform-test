@@ -24,7 +24,7 @@ msg_loaded.then(() => {
         host: 'office.vectioneer.com',
         request_port: 5558,
         subscribe_port: 5557,
-        timeout_ms: 1000,
+        timeout_ms: 2000,
         queue_length: 1000
     }, {
         login: 'russian_hacker',

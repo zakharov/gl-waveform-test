@@ -3,7 +3,7 @@
 import Waveform from 'gl-waveform'
 import FPS from 'fps-indicator'
 
-FPS();
+FPS('bottom-left');
 
 export class TestPlot {
     constructor() {
