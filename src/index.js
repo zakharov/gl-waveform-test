@@ -14,6 +14,10 @@ const req = new motorcortex.Request(motorcortex_types);
 const sub = new motorcortex.Subscribe(req);
 const session = new motorcortex.SessionManager(req, sub);
 
+//const frequiency_divider = 1;
+const frequiency_divider = 10; // Frequiency divider of the input data (1KHz / frequiency_divider)
+const range_msec = 50000; // Range of the X axis in milliseconds
+
 // When messages are a loaded open new session
 msg_loaded.then(() => {
     const open_handle = session.open({
@@ -46,12 +50,15 @@ session.notify(msg => {
         // when connection is ready, subscribe
         const sub_handle = sub.subscribe([
                 'root/Control_task/actual_cycle_max',
-                'root/Logger_task/actual_cycle_max'
-            ], 'test', 1);
+                'root/Logger_task/actual_cycle_max',
+                'root/Control/signalGenerator/output'
+            ], 'test', frequiency_divider);
 
         sub_handle.then(() => {
             plot.addTrace(sub_handle.layout())
             sub_handle.notify((msg) => {
+                // updating the plot
+                plot.update(msg, range_msec / frequiency_divider);
             });
         }).catch(() => {
             console.log('Failed to subscribe');
