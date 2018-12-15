@@ -56,32 +56,48 @@ export class TestPlot {
                 'black',
                 [-1200, 1200]);
             this.traces.push(new Waveform(config));
+            this.traces[this.traces.length - 1].__buffer = [];
             console.log('Added trace: ', t);
         });
     }
 
     update(parameters, range) {
         this.traces.forEach((t, index) => {
-            const parameter = parameters[index];
-            const timestamp = parameter.timestamp;
-            const value = parameter.value;
-            // updated y (amp) if necessary
-            if (value < t.amplitude[0]) {
-                t.update({
-                    amp: [value, t.amplitude[1]]
-                });
-            } else if (value > t.amplitude[1]) {
-                t.update({
-                    amp: [t.amplitude[0], value]
-                });
+
+            if (t.__buffer.length < 20) {
+                const parameter = parameters[index];
+                const timestamp = parameter.timestamp;
+                const value = parameter.value;
+                // updated y (amp) if necessary
+                if (value < t.amplitude[0]) {
+                    t.update({
+                        amp: [value, t.amplitude[1]]
+                    });
+                } else if (value > t.amplitude[1]) {
+                    t.update({
+                        amp: [t.amplitude[0], value]
+                    });
+                }
+                t.__buffer.push(value);
+            } else {
+                t.push([t.__buffer]);
+                const x_offset = t.total - range;
+                console.log(t.total);
+                if (x_offset > 0) {
+                    console.log('update');
+                    t.update({range: [x_offset, t.total]})
+                }
+                t.__buffer.length = 0;
             }
-            // update x (range) if necessary
-            const x_offset = t.total - range;
-            if (x_offset > 0) {
-                t.update({range: [x_offset, t.total]})
-            }
-            t.push([value]);
-            // t.push([{x: timestamp, y: value}]); ??
+
+            
+            // // update x (range) if necessary
+            // const x_offset = t.total - range;
+            // if (x_offset > 0) {
+            //     t.update({range: [x_offset, t.total]})
+            // }
+            // t.push([value]);
+            // // t.push([{x: timestamp, y: value}]); ??
         });
     }
 }

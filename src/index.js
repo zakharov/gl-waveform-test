@@ -15,7 +15,7 @@ const sub = new motorcortex.Subscribe(req);
 const session = new motorcortex.SessionManager(req, sub);
 
 //const frequiency_divider = 1;
-const frequiency_divider = 10; // Frequiency divider of the input data (1KHz / frequiency_divider)
+const frequiency_divider = 1; // Frequiency divider of the input data (1KHz / frequiency_divider)
 const range_msec = 50000; // Range of the X axis in milliseconds
 
 // When messages are a loaded open new session
