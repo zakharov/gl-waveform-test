@@ -2,17 +2,22 @@
 
 import Waveform from 'gl-waveform'
 import FPS from 'fps-indicator'
+import raf from 'raf'
 
-FPS('bottom-left');
+FPS('bottom-left')
 
+let acc = []
 export class TestPlot {
     constructor() {
+        this.firstTimestamp = null;
+
         this.traces = [];
         this.waveform = new Waveform();
         // register resize callback
         window.onresize = this.resize.bind(this);
-        // start rendering
-        requestAnimationFrame(this.render.bind(this));
+
+        this.render = this.render.bind(this);
+        this.render();
     }
 
     resize(e) {
@@ -32,23 +37,18 @@ export class TestPlot {
             color: color,
             opacity: 1,
             amp: amp,
-            time: 0,
-            total: 0,
-            // pxStep: 0.01
+            time: 0
         }
     }
 
     render(time) {
-        this.traces.forEach(trace => {
-            if (trace.total > 0) {
-                trace.render()
+        if (this.traces.length) {
+        this.traces.forEach(t => t.render())
             }
-        });
-        requestAnimationFrame(this.render.bind(this));
+        raf(this.render);
     }
 
     addTrace(traces) {
-        console.log(traces)
         traces.forEach(t => {
             const config = this.getDefaultTraceConfig(
                 this.waveform.canvas,
@@ -63,25 +63,21 @@ export class TestPlot {
     update(parameters, range) {
         this.traces.forEach((t, index) => {
             const parameter = parameters[index];
+            if (!parameter) return
             const timestamp = parameter.timestamp;
             const value = parameter.value;
-            // updated y (amp) if necessary
-            if (value < t.amplitude[0]) {
-                t.update({
-                    amp: [value, t.amplitude[1]]
-                });
-            } else if (value > t.amplitude[1]) {
-                t.update({
-                    amp: [t.amplitude[0], value]
-                });
+
+            if (!t.firstTimestamp) t.firstTimestamp = timestamp
+
+            // handle sample from the past or the future (network failure etc)
+            if (t.lastTimestamp > timestamp) {
+                console.warn('value from the past')
             }
-            // update x (range) if necessary
-            const x_offset = t.total - range;
-            if (x_offset > 0) {
-                t.update({range: [x_offset, t.total]})
+            else {
+                t.push(value);
+                if (!index) acc.push(value)
+                t.lastTimestamp = timestamp
             }
-            t.push([value]);
-            // t.push([{x: timestamp, y: value}]); ??
         });
     }
 }
